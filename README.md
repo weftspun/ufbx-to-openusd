@@ -30,6 +30,37 @@ Measured on the o3de motion-matching set, which motivated this:
 
 `probe.c` reports all of them and exits without converting. Run it first on anything unfamiliar.
 
+### And then check them against the geometry
+
+A header is a claim. `validate_geometry.py` derives the same four properties from the model
+itself and reports where the two disagree.
+
+| property | derived from |
+| --- | --- |
+| up | the longest bounding-box extent, confirmed by the head sitting above the foot |
+| scale | that height against a 1.7 m adult, which separates metres from centimetres |
+| forward | the ankle-to-toe vector, flattened onto the ground plane |
+| handedness | which side of `up x forward` the joint named left actually sits on |
+
+Handedness is the one worth having. A mirrored export keeps every name and moves the geometry,
+so nothing reads as wrong until a limb lands on the wrong side of a fitted body.
+
+Measured on Rin, converted through this path:
+
+    up          z          extent [1.13, 0.408, 1.773]
+    scale       metres     1.773 tall, head 1.427 above foot
+    forward     -y
+    handedness  right      left wrist +0.984 on up x forward
+
+Note the scale. The FBX is centimetres and the converted stage is metres, because the import
+normalises units the way Godot does with `target_unit_meters = 1.0`. Reading the header alone
+would call the stage wrong.
+
+**Both readings have to be in the same space or the comparison is meaningless.** Mesh points
+live in their prim's space and `bindTransforms` live in the skeleton prim's, so each needs its
+local-to-world applied first. Skipping that produced a confident Z-up answer from a mesh in
+one space and joints in another, and the joints read 152.4 while the mesh stood 1.773 tall.
+
 ## Geometric pivots
 
 ufbx resolves geometric transforms and offers three handlings. The choice is the caller's,
