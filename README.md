@@ -61,6 +61,28 @@ live in their prim's space and `bindTransforms` live in the skeleton prim's, so 
 local-to-world applied first. Skipping that produced a confident Z-up answer from a mesh in
 one space and joints in another, and the joints read 152.4 while the mesh stood 1.773 tall.
 
+### The cross-check is what makes that catchable
+
+Mesh and skeleton are two independent measurements of one body, so they are compared with each
+other before either is trusted. A body whose mesh spans 1.773 and whose joints span 152.4 is
+not unusual anatomy, it is two spaces, and no amount of care inside a single reader would find
+it. Joints sit inside the body, so the ratio is a little above one and never far from it.
+
+    mesh_span 1.773   joint_span 1.612   ratio 1.0998   up from both: z
+
+`test_validate_geometry.py` holds one control per failure this validator has actually had,
+plus one per property it claims to measure. Each builds a stage in memory, breaks exactly one
+thing, and asserts the validator says so.
+
+    ok   positive control: a clean body validates
+    ok   mesh scaled 100x against unscaled joints
+    ok   skeleton rotated 90 degrees against unrotated mesh
+    ok   whole body mirrored on x
+    ok   body upside down
+    ok   body a hundred times too large, header says metres
+
+The first two are the bugs above, kept as tests so they cannot come back quietly.
+
 ## Geometric pivots
 
 ufbx resolves geometric transforms and offers three handlings. The choice is the caller's,

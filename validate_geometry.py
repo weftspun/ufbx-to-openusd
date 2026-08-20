@@ -93,6 +93,42 @@ def main():
     joints = joint_centroids(stage)
     findings, disagreements = {}, []
 
+    # --- THE CROSS-CHECK ---------------------------------------------------------------
+    #
+    # Mesh and skeleton are two independent measurements of one body. Every space bug this
+    # file has had made them disagree, and every one of them still produced a confident
+    # single answer because only one source was consulted for each property.
+    #
+    # So compare the two before trusting either. A body whose mesh stands 1.773 tall and
+    # whose joints span 152.4 is not a body with an unusual proportion, it is two readings
+    # in different spaces, and no amount of care inside one reader would catch it.
+    if pts.size and joints:
+        jarr = np.array(list(joints.values()))
+        mesh_span = float(np.max(pts.max(axis=0) - pts.min(axis=0)))
+        joint_span = float(np.max(jarr.max(axis=0) - jarr.min(axis=0)))
+        ratio = mesh_span / joint_span if joint_span else float("inf")
+        findings["mesh_span"] = round(mesh_span, 4)
+        findings["joint_span"] = round(joint_span, 4)
+        findings["mesh_over_joint_span"] = round(ratio, 4)
+        # Joints sit inside the body, so the mesh is always a little larger and never
+        # smaller by much. Anything outside this band is a space mismatch, not anatomy.
+        if not 0.8 < ratio < 1.6:
+            disagreements.append(
+                f"mesh spans {mesh_span:.3f} and joints span {joint_span:.3f}, a factor of "
+                f"{ratio:.1f}. They are being read in different spaces, so every property "
+                "below is derived from a body that does not exist"
+            )
+        # And the two must call the same axis up, independently.
+        mesh_up = AXES[int(np.argmax(pts.max(axis=0) - pts.min(axis=0)))]
+        joint_up = AXES[int(np.argmax(jarr.max(axis=0) - jarr.min(axis=0)))]
+        findings["up_from_mesh"] = mesh_up
+        findings["up_from_joints"] = joint_up
+        if mesh_up != joint_up:
+            disagreements.append(
+                f"mesh says up={mesh_up} and joints say up={joint_up}. One of the two is "
+                "not in stage space"
+            )
+
     # --- UP, from the longest extent -------------------------------------------------
     #
     # A standing human is much taller than wide or deep, so the longest bounding-box axis is
