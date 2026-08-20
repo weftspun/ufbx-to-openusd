@@ -1,0 +1,8 @@
+ufbx.c
+ufbx.h
+probe
+probe.exe
+*.usd
+*.usda
+*.fbx
+__pycache__/
