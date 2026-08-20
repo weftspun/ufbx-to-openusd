@@ -105,6 +105,23 @@ def mirror_x():
     return m
 
 
+def look_at(eye, target, up, forward_sign=-1.0):
+    """A view matrix, with the forward axis as an argument.
+
+    `forward_sign=-1` is OpenGL, looking down -Z. `+1` is OpenCV, looking down +Z. The two
+    differ by one negated row and neither errors when handed to the wrong projector.
+    """
+    f = target - eye
+    f = f / np.linalg.norm(f)
+    s = np.cross(f, up)
+    s = s / np.linalg.norm(s)
+    u = np.cross(s, f)
+    M = np.eye(4)
+    M[0, :3], M[1, :3], M[2, :3] = s, u, forward_sign * f
+    M[:3, 3] = -M[:3, :3] @ eye
+    return M
+
+
 CONTROLS = []
 
 
@@ -149,6 +166,40 @@ def _too_large(p):
     return build(p, points=BOX * 100.0, joints=j)
 
 
+def camera_controls(tmp):
+    """The camera-convention failure, kept as a control.
+
+    A projector expecting +Z-forward, handed a -Z-forward matrix, clamps every vertex to its
+    minimum depth and returns a uniform map with full coverage. Nothing raises.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("vg", VALIDATOR)
+    vg = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(vg)
+
+    body = BOX.copy()
+    eye = np.array([0.0, -4.0, 0.85])
+    target = body.mean(axis=0)
+    up = np.array([0.0, 0.0, 1.0])
+
+    rows = []
+    # Right way round for a +Z-forward projector: nothing behind the pinhole.
+    _, ok_problems = vg.check_camera_convention(body, look_at(eye, target, up, +1.0))
+    rows.append(("camera +Z forward, the convention the projector expects",
+                 len(ok_problems) == 0, ok_problems))
+    # Inverted: every vertex behind. This is the bug.
+    _, bad_problems = vg.check_camera_convention(body, look_at(eye, target, up, -1.0))
+    rows.append(("camera -Z forward against a +Z projector",
+                 len(bad_problems) > 0, bad_problems))
+    # A clamped depth map: every vertex at one depth reads as valid and is not.
+    flat = np.tile(np.array([[0.0, 0.0, 1e-4]]), (len(body), 1))
+    _, flat_problems = vg.check_camera_convention(flat, np.eye(4), name="clamped")
+    rows.append(("every vertex at one depth, which is a clamp firing",
+                 len(flat_problems) > 0, flat_problems))
+    return rows
+
+
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         good = build(pathlib.Path(tmp) / "good.usda")
@@ -169,11 +220,18 @@ def main():
                 print(f"       expected a disagreement mentioning {must_match!r}")
                 print("       " + " / ".join(l.strip() for l in out.splitlines() if l.strip())[:200])
 
+        for name, passed, detail in camera_controls(tmp):
+            print(f"  {'ok  ' if passed else 'FAIL'} {name}")
+            if not passed:
+                failures.append(name)
+                print(f"       {detail}")
+
         print()
         if failures:
             print(f"{len(failures)} control(s) did not fail. The validator is not gating.")
             return 1
-        print(f"{len(CONTROLS)} negative controls, each caught for its own reason.")
+        print(f"{len(CONTROLS)} stage controls plus 3 camera controls, "
+              "each caught for its own reason.")
         return 0
 
 

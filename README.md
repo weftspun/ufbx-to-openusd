@@ -80,8 +80,25 @@ thing, and asserts the validator says so.
     ok   whole body mirrored on x
     ok   body upside down
     ok   body a hundred times too large, header says metres
+    ok   camera +Z forward, the convention the projector expects
+    ok   camera -Z forward against a +Z projector
+    ok   every vertex at one depth, which is a clamp firing
 
-The first two are the bugs above, kept as tests so they cannot come back quietly.
+Each is a bug this code actually had, kept as a test so it cannot come back quietly.
+
+### The camera convention is the newest one
+
+`pose-consensus`'s `Camera` is +Z-forward, the OpenCV convention. A `look_at` written
+-Z-forward, the OpenGL one, is the same matrix with a single negated row, and handing one to
+the other raises nothing: every vertex lands behind the pinhole, `z.clamp(min=1e-4)` fires on
+all of them, and the depth map returns a uniform `1e-4` with the coverage mask claiming the
+body fills the frame.
+
+`check_camera_convention` asserts two things, and the second is the one that matters. Depths
+must be positive, which catches a fully inverted camera. And they must **vary**: a body has
+depth, so a constant across thousands of vertices is a clamp firing rather than a flat body.
+
+Pass a camera with `--view cam.json` to check it.
 
 ## Geometric pivots
 

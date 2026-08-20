@@ -13,6 +13,8 @@ Usage:
 """
 
 import argparse
+import json
+import pathlib
 import sys
 
 import numpy as np
@@ -72,6 +74,48 @@ def mesh_points(stage):
     return np.concatenate(pts) if pts else np.empty((0, 3))
 
 
+def check_camera_convention(points, view, name="camera"):
+    """Does this view matrix put the body in FRONT of the camera?
+
+    Added from a failure. `pose-consensus`'s `Camera` is +Z-forward, the OpenCV convention,
+    and a `look_at` built -Z-forward, the OpenGL one, is the same matrix with one row negated.
+    Nothing errors. Every vertex lands behind the pinhole, the projector's `z.clamp(min=1e-4)`
+    fires on all of them, and the depth map comes back a uniform 1e-4 with the coverage mask
+    claiming the body fills the frame.
+
+    That reading is diagnostic once you know it, and it is why the clamp is there rather than
+    a NaN. This turns it into a check so it does not have to be recognised again.
+
+    Two things are asserted, and the second is the one that matters. Depths must be positive,
+    which catches a fully inverted camera. And they must VARY: a body has depth, so a constant
+    depth across thousands of vertices is a clamp firing, not a flat body.
+    """
+    n = points.shape[0]
+    cam = (view @ np.concatenate([points, np.ones((n, 1))], axis=1).T).T[:, :3]
+    z = cam[:, 2]
+    out = {
+        f"{name}_z_min": round(float(z.min()), 6),
+        f"{name}_z_max": round(float(z.max()), 6),
+        f"{name}_z_spread": round(float(z.max() - z.min()), 6),
+        f"{name}_behind_fraction": round(float((z <= 0).mean()), 4),
+    }
+    problems = []
+    if (z <= 0).mean() > 0.5:
+        problems.append(
+            f"{name}: {(z <= 0).mean():.0%} of vertices sit at or behind the pinhole. The "
+            "forward axis is inverted, which is +Z-forward against -Z-forward and is one "
+            "negated row"
+        )
+    # A body is not flat. A spread this small means the projector clamped everything to one
+    # value, which reads as a valid depth map and is not one.
+    elif float(z.max() - z.min()) < 1e-3:
+        problems.append(
+            f"{name}: depth spread is {float(z.max() - z.min()):.2e} across {n} vertices. "
+            "That is a clamp firing, not a body"
+        )
+    return out, problems
+
+
 def pick(joints, *fragments):
     """First joint whose name contains every fragment, case-insensitively."""
     for name in joints:
@@ -86,6 +130,8 @@ def main():
     ap.add_argument("stage")
     ap.add_argument("--expect-up", default=None)
     ap.add_argument("--expect-meters", type=float, default=None)
+    ap.add_argument("--view", default=None,
+                    help='JSON holding {"view": 4x4}, checked for forward-axis convention')
     args = ap.parse_args()
 
     stage = Usd.Stage.Open(args.stage)
@@ -202,6 +248,14 @@ def main():
                 "the joint named left sits on the right of up x forward: the export is "
                 "mirrored, or the names do not follow the geometry"
             )
+
+    # --- the camera, if one was given --------------------------------------------------
+    if args.view:
+        view = np.array(json.loads(pathlib.Path(args.view).read_text())["view"], dtype=float)
+        src = pts if pts.size else np.array(list(joints.values()))
+        cam_findings, cam_problems = check_camera_convention(src, view)
+        findings.update(cam_findings)
+        disagreements.extend(cam_problems)
 
     # --- compare with what was claimed ------------------------------------------------
     if args.expect_up and findings.get("up_axis_from_extent"):
