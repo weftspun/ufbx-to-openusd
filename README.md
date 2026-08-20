@@ -103,7 +103,35 @@ FBX property template declares `GeometricTranslation`, `GeometricRotation` and
 `GeometricScaling` in every file ever written, so grepping the binary finds them and proves
 nothing. Only a resolved read answers it.
 
-## Interface
+## The bus is the interface
+
+A transport terminates a client protocol and hands the result to an interactor over the
+iceoryx2 ring. `bus_server.py` is that half. The HTTP surface below stays for standalone
+testing and is not how this is reached in the fabric.
+
+    weft/interactor/ufbx-to-openusd
+
+**The reply carries a handle, not the stage.** `weft/limits.hpp` caps a value at 128 KiB and a
+key at 2 KiB, with 32 in flight and a 60-second action budget. A converted stage is megabytes
+and Rin alone is 7.5 MB, so the reply is the path and the hash, and the bytes travel on the
+filesystem the two processes already share. `encode` refuses to send an oversized reply rather
+than truncating one, because a truncated reply parses and lies.
+
+Chunking is the other option `weft/command.hpp` names, and it is wrong here: every consumer
+downstream opens a stage by path, so reassembling one from chunks to write it back out buys
+nothing.
+
+**The 60-second budget binds harder than the size cap.** Converting 22 clips took minutes, so a
+request converts one file and a caller wanting a set sends a set of requests.
+
+Python and C++ both reach the bus. C++ links `weft::harness`, which dlopens
+`libiceoryx2_ffi_c` through a generated dispatch table so no plane links iceoryx2 itself.
+Python uses the `iceoryx2` binding, 0.9.3, and takes `ctypes.c_uint8` slices.
+
+**iceoryx2 needs POSIX shared memory.** Node creation fails on Windows with `InternalError`,
+so this runs under Linux or WSL.
+
+## HTTP, for standalone testing
 
 `POST /predict`:
 
