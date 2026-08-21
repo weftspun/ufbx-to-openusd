@@ -22,11 +22,11 @@ something that looks right and is wrong.
 
 Measured on the o3de motion-matching set, which motivated this:
 
-| convention | value | what assuming would cost |
-| --- | --- | --- |
-| `unit_meters` | 0.01 | the file is in centimetres, so a body comes out 100x too large |
-| `fps` | 30 | Blender's scene default is 25, and resampling to it silently rewrites every key |
-| up axis | +Z | a Y-up assumption lays the character on its side |
+| convention    | value | what assuming would cost                                                        |
+| ------------- | ----- | ------------------------------------------------------------------------------- |
+| `unit_meters` | 0.01  | the file is in centimetres, so a body comes out 100x too large                  |
+| `fps`         | 30    | Blender's scene default is 25, and resampling to it silently rewrites every key |
+| up axis       | +Z    | a Y-up assumption lays the character on its side                                |
 
 `probe.c` reports all of them and exits without converting. Run it first on anything unfamiliar.
 
@@ -35,12 +35,12 @@ Measured on the o3de motion-matching set, which motivated this:
 A header is a claim. `validate_geometry.py` derives the same four properties from the model
 itself and reports where the two disagree.
 
-| property | derived from |
-| --- | --- |
-| up | the longest bounding-box extent, confirmed by the head sitting above the foot |
-| scale | that height against a 1.7 m adult, which separates metres from centimetres |
-| forward | the ankle-to-toe vector, flattened onto the ground plane |
-| handedness | which side of `up x forward` the joint named left actually sits on |
+| property   | derived from                                                                  |
+| ---------- | ----------------------------------------------------------------------------- |
+| up         | the longest bounding-box extent, confirmed by the head sitting above the foot |
+| scale      | that height against a 1.7 m adult, which separates metres from centimetres    |
+| forward    | the ankle-to-toe vector, flattened onto the ground plane                      |
+| handedness | which side of `up x forward` the joint named left actually sits on            |
 
 Handedness is the one worth having. A mirrored export keeps every name and moves the geometry,
 so nothing reads as wrong until a limb lands on the wrong side of a fitted body.
@@ -105,11 +105,11 @@ Pass a camera with `--view cam.json` to check it.
 ufbx resolves geometric transforms and offers three handlings. The choice is the caller's,
 because the right one depends on what the output is for.
 
-| mode | effect |
-| --- | --- |
-| `helper_nodes` | pivots survive as explicit nodes. Nothing is lost, the hierarchy grows |
+| mode              | effect                                                                       |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `helper_nodes`    | pivots survive as explicit nodes. Nothing is lost, the hierarchy grows       |
 | `modify_geometry` | pivots are baked into vertices. Visually identical, the pivot stops existing |
-| `preserve` | fail rather than bake, when a pivot is found and cannot be kept |
+| `preserve`        | fail rather than bake, when a pivot is found and cannot be kept              |
 
 Godot exposes the same choice as `allow_geometry_helper_nodes`. Blender's importer exposes no
 option at all and bakes, which is why "preserve geometric pivots" cannot be honoured through
@@ -152,13 +152,13 @@ so this runs under Linux or WSL.
 
 `POST /predict`:
 
-| input | type | default | note |
-| --- | --- | --- | --- |
-| `fbx` | path or URL or base64 | required | |
-| `pivots` | str | `helper_nodes` | `helper_nodes`, `modify_geometry`, or `preserve` |
-| `up_axis` | str | `z` | the USD stage's up axis. The FBX's own is reported either way |
-| `meters_per_unit` | float | `1.0` | output scale. The FBX's own is reported either way |
-| `resample_fps` | float | `0` | 0 keeps the file's rate rather than choosing one |
+| input             | type                  | default        | note                                                          |
+| ----------------- | --------------------- | -------------- | ------------------------------------------------------------- |
+| `fbx`             | path or URL or base64 | required       |                                                               |
+| `pivots`          | str                   | `helper_nodes` | `helper_nodes`, `modify_geometry`, or `preserve`              |
+| `up_axis`         | str                   | `z`            | the USD stage's up axis. The FBX's own is reported either way |
+| `meters_per_unit` | float                 | `1.0`          | output scale. The FBX's own is reported either way            |
+| `resample_fps`    | float                 | `0`            | 0 keeps the file's rate rather than choosing one              |
 
 Returns `{stage, conventions, pivots_found, clips, sha256}`. `conventions` carries what the
 file said, not what was requested, so a caller can tell a conversion from an assumption.
